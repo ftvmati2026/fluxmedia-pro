@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from fastapi import HTTPException, UploadFile
 
 from faster_whisper import WhisperModel
@@ -26,6 +28,10 @@ WHISPER_BEAM_SIZE = int(os.getenv("WHISPER_BEAM_SIZE", "1"))
 ENABLE_DIARIZATION = os.getenv("ENABLE_DIARIZATION", "false").lower() in {"1", "true", "yes", "on"}
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
+TRANSCRIPTION_PROVIDER = os.getenv("TRANSCRIPTION_PROVIDER", "local").lower()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "whisper-large-v3-turbo")
+GROQ_MAX_BYTES = 25 * 1024 * 1024
 OUTPUT_AUDIO_FORMAT = os.getenv("OUTPUT_AUDIO_FORMAT", "mp3").lower()
 
 
@@ -174,6 +180,9 @@ class MediaProcessingService:
         return self._whisper_model
 
     def _transcribe(self, audio_path: Path) -> tuple[list[TranscriptSegment], str]:
+        if TRANSCRIPTION_PROVIDER == "groq":
+            return self._transcribe_with_groq(audio_path)
+
         model = self._get_model()
         segments_iter, _ = model.transcribe(
             str(audio_path),
@@ -202,6 +211,45 @@ class MediaProcessingService:
             for start, end, text in raw_segments
         ]
         return segments, " ".join(texts).strip()
+
+    def _transcribe_with_groq(self, audio_path: Path) -> tuple[list[TranscriptSegment], str]:
+        if not GROQ_API_KEY:
+            raise HTTPException(status_code=500, detail="El servidor no tiene configurada la clave de transcripción.")
+        if audio_path.stat().st_size > GROQ_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="El audio supera el límite de 25 MB del servicio de transcripción.")
+
+        try:
+            with audio_path.open("rb") as audio_file:
+                response = requests.post(
+                    "https://api.groq.com/openai/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                    files={"file": (audio_path.name, audio_file, "audio/mpeg")},
+                    data={
+                        "model": GROQ_MODEL,
+                        "language": "es",
+                        "response_format": "verbose_json",
+                        "temperature": "0",
+                    },
+                    timeout=(30, 600),
+                )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.Timeout as exc:
+            raise HTTPException(status_code=504, detail="La transcripción tardó demasiado. Intenta nuevamente con un archivo más corto.") from exc
+        except requests.RequestException as exc:
+            detail = exc.response.text if exc.response is not None else str(exc)
+            raise HTTPException(status_code=502, detail=f"El servicio de transcripción no respondió correctamente: {detail[:300]}") from exc
+
+        segments = [
+            TranscriptSegment(
+                start=round(float(item.get("start", 0)), 2),
+                end=round(float(item.get("end", 0)), 2),
+                text=str(item.get("text", "")).strip(),
+            )
+            for item in payload.get("segments", [])
+            if str(item.get("text", "")).strip()
+        ]
+        return segments, str(payload.get("text", "")).strip()
 
     def _get_diarization_pipeline(self) -> Any:
         if self._diarization_pipeline is not None:

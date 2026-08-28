@@ -32,3 +32,5 @@ Configurar `HF_TOKEN` y `ENABLE_DIARIZATION=true` como variables de entorno ante
 ## Despliegue publico
 
 El repositorio incluye `Dockerfile`, `.dockerignore` y `render.yaml` para desplegar la aplicacion completa en Render. En produccion, configura `HF_TOKEN` y `ENABLE_DIARIZATION=true` si quieres identificar interlocutores.
+
+Para una instancia pequena, se puede configurar `TRANSCRIPTION_PROVIDER=groq` y guardar `GROQ_API_KEY` como secreto del servicio. Asi la aplicacion no carga Whisper en el servidor y los usuarios no necesitan ninguna cuenta.

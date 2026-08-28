@@ -13,3 +13,7 @@ services:
         value: int8
       - key: ENABLE_DIARIZATION
         value: "false"
+      - key: TRANSCRIPTION_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
