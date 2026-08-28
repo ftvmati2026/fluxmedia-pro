@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: fluxmedia-pro
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: WHISPER_MODEL_SIZE
+        value: base
+      - key: WHISPER_DEVICE
+        value: cpu
+      - key: WHISPER_COMPUTE_TYPE
+        value: int8
+      - key: ENABLE_DIARIZATION
+        value: "false"

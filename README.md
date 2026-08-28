@@ -28,3 +28,7 @@ Configurar `HF_TOKEN` y `ENABLE_DIARIZATION=true` como variables de entorno ante
 
 - Python 3.12 recomendado.
 - FFmpeg disponible en PATH.
+
+## Despliegue publico
+
+El repositorio incluye `Dockerfile`, `.dockerignore` y `render.yaml` para desplegar la aplicacion completa en Render. En produccion, configura `HF_TOKEN` y `ENABLE_DIARIZATION=true` si quieres identificar interlocutores.

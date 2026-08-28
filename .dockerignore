@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+.venv312
+__pycache__
+*.pyc
+*.pyo
+*.log
+tmp
+temp
+Cffmpeg
+ffmpeg-9.0.1
+ffmpeg-9.0.1.tar.xz
+*.zip
