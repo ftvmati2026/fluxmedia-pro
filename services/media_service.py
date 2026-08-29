@@ -32,6 +32,7 @@ TRANSCRIPTION_PROVIDER = os.getenv("TRANSCRIPTION_PROVIDER", "local").lower()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "whisper-large-v3-turbo")
 GROQ_MAX_BYTES = 25 * 1024 * 1024
+GROQ_CHUNK_SECONDS = 600
 OUTPUT_AUDIO_FORMAT = os.getenv("OUTPUT_AUDIO_FORMAT", "mp3").lower()
 
 
@@ -69,7 +70,12 @@ class MediaProcessingService:
         await self._validate_upload(file, allowed=AUDIO_EXTENSIONS)
         input_path = await self._persist_upload(file, suffix=Path(file.filename or "").suffix)
         try:
-            segments, full_text = await asyncio.to_thread(self._transcribe, input_path)
+            if TRANSCRIPTION_PROVIDER == "groq":
+                with self.temp_manager.managed_temp_path(suffix=".mp3") as normalized_path:
+                    await asyncio.to_thread(self._normalize_audio_ffmpeg, input_path, normalized_path)
+                    segments, full_text = await asyncio.to_thread(self._transcribe, normalized_path)
+            else:
+                segments, full_text = await asyncio.to_thread(self._transcribe, input_path)
             return {
                 "text_full": self._format_transcript(segments, full_text),
                 "segments": [segment.__dict__ for segment in segments],
@@ -158,9 +164,33 @@ class MediaProcessingService:
             "16000",
             "-ac",
             "1",
+            "-b:a",
+            "64k",
             str(output_path),
         ]
         self._run_subprocess(cmd)
+
+    def _normalize_audio_ffmpeg(self, input_path: Path, output_path: Path) -> None:
+        if not shutil_which("ffmpeg"):
+            raise HTTPException(status_code=500, detail="FFmpeg no está instalado o no está disponible en PATH.")
+        self._run_subprocess([
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_path),
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-acodec",
+            "libmp3lame",
+            "-b:a",
+            "64k",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            str(output_path),
+        ])
 
     def _run_subprocess(self, cmd: list[str]) -> None:
         proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -218,6 +248,51 @@ class MediaProcessingService:
         if audio_path.stat().st_size > GROQ_MAX_BYTES:
             raise HTTPException(status_code=400, detail="El audio supera el límite de 25 MB del servicio de transcripción.")
 
+        if audio_path.stat().st_size <= GROQ_MAX_BYTES:
+            return self._transcribe_with_groq_single(audio_path, offset_seconds=0)
+
+        with tempfile.TemporaryDirectory(prefix="fluxmedia-chunks-") as chunk_dir:
+            chunk_pattern = str(Path(chunk_dir) / "chunk_%04d.mp3")
+            self._run_subprocess([
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(audio_path),
+                "-map",
+                "0:a:0",
+                "-vn",
+                "-f",
+                "segment",
+                "-segment_time",
+                str(GROQ_CHUNK_SECONDS),
+                "-reset_timestamps",
+                "1",
+                "-acodec",
+                "libmp3lame",
+                "-b:a",
+                "64k",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                chunk_pattern,
+            ])
+            all_segments: list[TranscriptSegment] = []
+            all_text: list[str] = []
+            chunks = sorted(Path(chunk_dir).glob("chunk_*.mp3"))
+            if not chunks:
+                raise HTTPException(status_code=500, detail="No se pudo dividir el audio para transcribirlo.")
+            for index, chunk_path in enumerate(chunks):
+                chunk_segments, chunk_text = self._transcribe_with_groq_single(
+                    chunk_path,
+                    offset_seconds=index * GROQ_CHUNK_SECONDS,
+                )
+                all_segments.extend(chunk_segments)
+                if chunk_text:
+                    all_text.append(chunk_text)
+            return all_segments, " ".join(all_text).strip()
+
+    def _transcribe_with_groq_single(self, audio_path: Path, offset_seconds: int) -> tuple[list[TranscriptSegment], str]:
         try:
             with audio_path.open("rb") as audio_file:
                 response = requests.post(
@@ -235,15 +310,15 @@ class MediaProcessingService:
             response.raise_for_status()
             payload = response.json()
         except requests.Timeout as exc:
-            raise HTTPException(status_code=504, detail="La transcripción tardó demasiado. Intenta nuevamente con un archivo más corto.") from exc
+            raise HTTPException(status_code=504, detail="La transcripción tardó demasiado. Intenta nuevamente.") from exc
         except requests.RequestException as exc:
             detail = exc.response.text if exc.response is not None else str(exc)
             raise HTTPException(status_code=502, detail=f"El servicio de transcripción no respondió correctamente: {detail[:300]}") from exc
 
         segments = [
             TranscriptSegment(
-                start=round(float(item.get("start", 0)), 2),
-                end=round(float(item.get("end", 0)), 2),
+                start=round(float(item.get("start", 0)) + offset_seconds, 2),
+                end=round(float(item.get("end", 0)) + offset_seconds, 2),
                 text=str(item.get("text", "")).strip(),
             )
             for item in payload.get("segments", [])
