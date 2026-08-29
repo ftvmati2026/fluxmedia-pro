@@ -18,6 +18,7 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("media-app")
+APP_VERSION = os.getenv("APP_VERSION", "groq-chunking-v2")
 
 
 app = FastAPI(
@@ -56,7 +57,13 @@ async def root() -> FileResponse:
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    return JSONResponse({"status": "ok"})
+    return JSONResponse(
+        {
+            "status": "ok",
+            "version": APP_VERSION,
+            "transcription_provider": os.getenv("TRANSCRIPTION_PROVIDER", "local"),
+        }
+    )
 
 
 @app.post("/api/v1/video-to-audio")

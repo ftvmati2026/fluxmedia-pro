@@ -245,11 +245,6 @@ class MediaProcessingService:
     def _transcribe_with_groq(self, audio_path: Path) -> tuple[list[TranscriptSegment], str]:
         if not GROQ_API_KEY:
             raise HTTPException(status_code=500, detail="El servidor no tiene configurada la clave de transcripción.")
-        if audio_path.stat().st_size > GROQ_MAX_BYTES:
-            raise HTTPException(status_code=400, detail="El audio supera el límite de 25 MB del servicio de transcripción.")
-
-        if audio_path.stat().st_size <= GROQ_MAX_BYTES:
-            return self._transcribe_with_groq_single(audio_path, offset_seconds=0)
 
         with tempfile.TemporaryDirectory(prefix="fluxmedia-chunks-") as chunk_dir:
             chunk_pattern = str(Path(chunk_dir) / "chunk_%04d.mp3")
