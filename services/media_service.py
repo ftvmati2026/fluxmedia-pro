@@ -19,7 +19,11 @@ from services.cleanup_service import TempFileManager
 
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
-AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
+AUDIO_EXTENSIONS = {
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".oga", ".opus",
+    ".wma", ".aiff", ".aif", ".ape", ".amr", ".3gp", ".3gpp", ".mka",
+    ".webm", ".weba", ".ac3", ".caf", ".au", ".snd",
+}
 MAX_UPLOAD_SIZE_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(1024 * 1024 * 1024)))  # 1 GB default
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
@@ -67,7 +71,7 @@ class MediaProcessingService:
             self.temp_manager.safe_delete(input_path)
 
     async def audio_to_text(self, file: UploadFile) -> dict[str, Any]:
-        await self._validate_upload(file, allowed=AUDIO_EXTENSIONS)
+        await self._validate_upload(file, allowed=AUDIO_EXTENSIONS, audio_input=True)
         input_path = await self._persist_upload(file, suffix=Path(file.filename or "").suffix)
         try:
             if TRANSCRIPTION_PROVIDER == "groq":
@@ -126,19 +130,21 @@ class MediaProcessingService:
 
         return path
 
-    async def _validate_upload(self, file: UploadFile, allowed: set[str]) -> None:
+    async def _validate_upload(self, file: UploadFile, allowed: set[str], audio_input: bool = False) -> None:
         if not file.filename:
             raise HTTPException(status_code=400, detail="El archivo no tiene nombre.")
 
         ext = Path(file.filename).suffix.lower()
-        if ext not in allowed:
+        if not audio_input and ext not in allowed:
             raise HTTPException(
                 status_code=400,
                 detail=f"Formato no válido: {ext}. Formatos permitidos: {', '.join(sorted(allowed))}.",
             )
 
         content_type = (file.content_type or "").lower()
-        if content_type and not self._looks_compatible_content_type(content_type, allowed):
+        if audio_input and content_type.startswith("video/") and content_type not in {"video/3gpp", "video/3gp"}:
+            raise HTTPException(status_code=400, detail=f"El archivo parece ser video ({content_type}), no audio.")
+        if not audio_input and content_type and not self._looks_compatible_content_type(content_type, allowed):
             raise HTTPException(status_code=400, detail=f"Tipo MIME no compatible: {content_type}.")
 
     def _looks_compatible_content_type(self, content_type: str, allowed: set[str]) -> bool:
