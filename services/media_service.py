@@ -35,8 +35,7 @@ DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization
 TRANSCRIPTION_PROVIDER = os.getenv("TRANSCRIPTION_PROVIDER", "local").lower()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "whisper-large-v3-turbo")
-GROQ_MAX_BYTES = 25 * 1024 * 1024
-GROQ_CHUNK_SECONDS = 600
+GROQ_CHUNK_SECONDS = 480
 OUTPUT_AUDIO_FORMAT = os.getenv("OUTPUT_AUDIO_FORMAT", "mp3").lower()
 
 
@@ -75,7 +74,7 @@ class MediaProcessingService:
         input_path = await self._persist_upload(file, suffix=Path(file.filename or "").suffix)
         try:
             if TRANSCRIPTION_PROVIDER == "groq":
-                with self.temp_manager.managed_temp_path(suffix=".mp3") as normalized_path:
+                with self.temp_manager.managed_temp_path(suffix=".wav") as normalized_path:
                     await asyncio.to_thread(self._normalize_audio_ffmpeg, input_path, normalized_path)
                     segments, full_text = await asyncio.to_thread(self._transcribe, normalized_path)
             else:
@@ -187,14 +186,16 @@ class MediaProcessingService:
             "-map",
             "0:a:0",
             "-vn",
-            "-acodec",
-            "libmp3lame",
-            "-b:a",
-            "64k",
+            "-map_metadata",
+            "-1",
             "-ar",
             "16000",
             "-ac",
             "1",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "wav",
             str(output_path),
         ])
 
@@ -253,7 +254,7 @@ class MediaProcessingService:
             raise HTTPException(status_code=500, detail="El servidor no tiene configurada la clave de transcripción.")
 
         with tempfile.TemporaryDirectory(prefix="fluxmedia-chunks-") as chunk_dir:
-            chunk_pattern = str(Path(chunk_dir) / "chunk_%04d.mp3")
+            chunk_pattern = str(Path(chunk_dir) / "chunk_%04d.wav")
             self._run_subprocess([
                 "ffmpeg",
                 "-y",
@@ -268,19 +269,19 @@ class MediaProcessingService:
                 str(GROQ_CHUNK_SECONDS),
                 "-reset_timestamps",
                 "1",
-                "-acodec",
-                "libmp3lame",
-                "-b:a",
-                "64k",
+                "-map_metadata",
+                "-1",
                 "-ar",
                 "16000",
                 "-ac",
                 "1",
+                "-c:a",
+                "pcm_s16le",
                 chunk_pattern,
             ])
             all_segments: list[TranscriptSegment] = []
             all_text: list[str] = []
-            chunks = sorted(Path(chunk_dir).glob("chunk_*.mp3"))
+            chunks = sorted(Path(chunk_dir).glob("chunk_*.wav"))
             if not chunks:
                 raise HTTPException(status_code=500, detail="No se pudo dividir el audio para transcribirlo.")
             for index, chunk_path in enumerate(chunks):
@@ -299,7 +300,7 @@ class MediaProcessingService:
                 response = requests.post(
                     "https://api.groq.com/openai/v1/audio/transcriptions",
                     headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                    files={"file": (audio_path.name, audio_file, "audio/mpeg")},
+                    files={"file": (audio_path.name, audio_file, "audio/wav")},
                     data={
                         "model": GROQ_MODEL,
                         "language": "es",
