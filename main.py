@@ -4,12 +4,13 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from services.cleanup_service import TempFileManager
+from services.auth_service import auth_service, get_current_user
 from services.media_service import MediaProcessingService
 
 
@@ -66,10 +67,46 @@ async def health() -> JSONResponse:
     )
 
 
+@app.get("/api/v1/auth/config")
+async def auth_config() -> JSONResponse:
+    return JSONResponse(
+        {
+            "enabled": auth_service.configured,
+            "supabase_url": auth_service.url,
+            "supabase_anon_key": auth_service.anon_key,
+        }
+    )
+
+
+@app.get("/api/v1/account")
+async def account(user=Depends(get_current_user)) -> JSONResponse:
+    return JSONResponse(await auth_service.account(user))
+
+
+@app.post("/api/v1/account/consume/{service}")
+async def consume_free_use(service: str, user=Depends(get_current_user)) -> JSONResponse:
+    return JSONResponse(await auth_service.consume_or_reject(user, service))
+
+
+@app.get("/api/v1/admin/users")
+async def admin_users(user=Depends(get_current_user)) -> JSONResponse:
+    return JSONResponse(await auth_service.admin_users(user))
+
+
+@app.patch("/api/v1/admin/users/{user_id}/plan")
+async def admin_set_plan(user_id: str, payload: dict[str, str], user=Depends(get_current_user)) -> JSONResponse:
+    return JSONResponse(await auth_service.admin_set_plan(user, user_id, payload.get("plan", "")))
+
+
 @app.post("/api/v1/video-to-audio")
-async def video_to_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...)) -> FileResponse:
+async def video_to_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), user=Depends(get_current_user)) -> FileResponse:
     try:
         output_path, filename = await media_service.video_to_audio(file)
+        try:
+            await auth_service.consume_or_reject(user, "video_to_audio")
+        except Exception:
+            temp_manager.safe_delete(Path(output_path))
+            raise
         background_tasks.add_task(temp_manager.safe_delete, Path(output_path))
         return FileResponse(
             path=output_path,
@@ -86,8 +123,9 @@ async def video_to_audio(background_tasks: BackgroundTasks, file: UploadFile = F
 
 
 @app.post("/api/v1/audio-to-text")
-async def audio_to_text(file: UploadFile = File(...)) -> JSONResponse:
+async def audio_to_text(file: UploadFile = File(...), user=Depends(get_current_user)) -> JSONResponse:
     try:
+        await auth_service.consume_or_reject(user, "audio_to_text")
         result = await media_service.audio_to_text(file)
         return JSONResponse(result)
     except HTTPException:
@@ -98,8 +136,9 @@ async def audio_to_text(file: UploadFile = File(...)) -> JSONResponse:
 
 
 @app.post("/api/v1/video-to-text")
-async def video_to_text(file: UploadFile = File(...)) -> JSONResponse:
+async def video_to_text(file: UploadFile = File(...), user=Depends(get_current_user)) -> JSONResponse:
     try:
+        await auth_service.consume_or_reject(user, "video_to_text")
         result = await media_service.video_to_text(file)
         return JSONResponse(result)
     except HTTPException:
