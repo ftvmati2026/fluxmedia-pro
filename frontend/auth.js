@@ -56,7 +56,7 @@
     </div>`;
     document.body.appendChild(shell);
     shell.querySelector('#google-login').onclick = async () => {
-      const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+      const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/app` } });
       if (error) showAuthError(error.message);
     };
     shell.querySelector('#email-login-form').onsubmit = async (event) => {
