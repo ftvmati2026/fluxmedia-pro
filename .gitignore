@@ -19,3 +19,10 @@ frontend/assets/*.jpg
 frontend/assets/*.jpeg
 frontend/assets/*.png
 !frontend/assets/fluxmedia-pro.jpg
+
+# Secret files and temporary credential notes
+client_secret_*.json
+SUPABASE_*.txt
+GENERADO.txt
+*.key
+
