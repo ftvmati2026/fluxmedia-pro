@@ -1,0 +1,3 @@
+https://fywpnosqfaqoweiphhwl.supabase.co/auth/v1/callback
+
+fywpnosqfaqoweiphhwl

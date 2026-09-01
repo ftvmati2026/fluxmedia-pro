@@ -25,14 +25,8 @@
     .upgrade-card { position: fixed; left: 50%; top: 50%; z-index: 60; width: min(92vw, 29rem); transform: translate(-50%,-50%); border: 1px solid rgba(101,231,245,.35); border-radius: 1.5rem; padding: 1.6rem; color: white; background: #0b1b30; box-shadow: 0 25px 90px rgba(0,0,0,.55); }
     .upgrade-card a { display: inline-block; margin-top: 1rem; border-radius: .75rem; padding: .75rem 1rem; color: #06101d; background: #65e7f5; font-weight: 800; text-decoration: none; }
     .upgrade-card button { float: right; border: 0; color: #aac0d8; background: transparent; font-size: 1.2rem; cursor: pointer; }
-    #admin-panel { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(94vw, 30rem); border: 1px solid rgba(174,222,255,.2); border-radius: 1.2rem; color: white; background: rgba(11,27,48,.96); backdrop-filter: blur(16px); box-shadow: 0 24px 80px rgba(0,0,0,.5); transition: all .25s ease; overflow: hidden; }
-    #admin-panel.collapsed { width: auto; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
-    .admin-header { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .65rem 1rem; cursor: pointer; user-select: none; background: rgba(255,255,255,.04); }
-    .admin-header:hover { background: rgba(255,255,255,.07); }
-    .admin-header h3 { margin: 0; font-size: .88rem; font-weight: 700; color: #65e7f5; display: flex; align-items: center; gap: .45rem; white-space: nowrap; }
-    .admin-header .admin-toggle-icon { font-size: .75rem; color: #a9bad0; transition: transform .2s ease; }
-    .admin-body { padding: .8rem 1rem 1rem; max-height: 65vh; overflow-y: auto; }
-    #admin-panel.collapsed .admin-body { display: none; }
+    #admin-panel { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(94vw, 30rem); max-height: 70vh; overflow: auto; border: 1px solid rgba(174,222,255,.18); border-radius: 1.2rem; padding: 1rem; color: white; background: rgba(11,27,48,.96); box-shadow: 0 24px 80px rgba(0,0,0,.4); }
+    #admin-panel h3 { margin: 0 0 .8rem; }
     .admin-user { display: flex; align-items: center; justify-content: space-between; gap: .6rem; border-top: 1px solid rgba(255,255,255,.1); padding: .7rem 0; font-size: .78rem; }
     .admin-user small { display: block; color: #9db2ca; }
     .admin-plan-button { white-space: nowrap; }
@@ -62,7 +56,7 @@
     </div>`;
     document.body.appendChild(shell);
     shell.querySelector('#google-login').onclick = async () => {
-      const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+      const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/app` } });
       if (error) showAuthError(error.message);
     };
     shell.querySelector('#email-login-form').onsubmit = async (event) => {
@@ -113,71 +107,23 @@
     document.body.appendChild(bar);
   }
 
-  let adminPanelOpen = false;
-
   async function renderAdminPanel() {
-    if (!account?.is_master) {
-      document.querySelector('#admin-panel')?.remove();
-      return;
-    }
-    let panel = document.querySelector('#admin-panel');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'admin-panel';
-      if (!adminPanelOpen) panel.classList.add('collapsed');
-      document.body.appendChild(panel);
-    }
-    panel.innerHTML = `
-      <div class="admin-header">
-        <h3>⚙️ Panel Administrador</h3>
-        <span class="admin-toggle-icon">${adminPanelOpen ? '▼' : '▲'}</span>
-      </div>
-      <div class="admin-body">
-        <p style="color:#9db2ca;font-size:.8rem;margin:0 0 .8rem">Administrá accesos y planes de usuarios.</p>
-        <div id="admin-users">Cargando usuarios...</div>
-      </div>
-    `;
-
-    panel.querySelector('.admin-header').onclick = () => {
-      adminPanelOpen = !adminPanelOpen;
-      panel.classList.toggle('collapsed', !adminPanelOpen);
-      const icon = panel.querySelector('.admin-toggle-icon');
-      if (icon) icon.textContent = adminPanelOpen ? '▼' : '▲';
-    };
-
+    document.querySelector('#admin-panel')?.remove();
+    if (!account?.is_master) return;
+    const panel = document.createElement('div');
+    panel.id = 'admin-panel';
+    panel.innerHTML = '<h3>Panel maestro</h3><p style="color:#9db2ca;font-size:.8rem">Administrá accesos especiales.</p><div id="admin-users">Cargando usuarios...</div>';
+    document.body.appendChild(panel);
     const response = await authenticatedFetch(`${apiBase}/api/v1/admin/users`);
-    if (!response.ok) {
-      const container = panel.querySelector('#admin-users');
-      if (container) container.innerHTML = '<p style="color:#ff9eae;font-size:.8rem">No se pudieron cargar los usuarios.</p>';
-      return;
-    }
+    if (!response.ok) return;
     const users = await response.json();
-    const container = panel.querySelector('#admin-users');
-    if (container) {
-      container.innerHTML = users.map((user) => `
-        <div class="admin-user">
-          <span>${user.email}<small>Plan actual: <strong>${user.plan}</strong></small></span>
-          <span>
-            <button class="admin-plan-button" data-id="${user.id}" data-plan="premium">30 días</button>
-            <button class="admin-plan-button" data-id="${user.id}" data-plan="lifetime">Permanente</button>
-          </span>
-        </div>
-      `).join('');
-
-      container.querySelectorAll('.admin-plan-button').forEach((button) => {
-        button.onclick = async (e) => {
-          e.stopPropagation();
-          button.disabled = true;
-          button.style.opacity = '0.5';
-          await authenticatedFetch(`${apiBase}/api/v1/admin/users/${button.dataset.id}/plan`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plan: button.dataset.plan })
-          });
-          renderAdminPanel();
-        };
-      });
-    }
+    panel.querySelector('#admin-users').innerHTML = users.map((user) => `<div class="admin-user"><span>${user.email}<small>Plan actual: ${user.plan}</small></span><span><button class="admin-plan-button" data-id="${user.id}" data-plan="premium">30 días</button> <button class="admin-plan-button" data-id="${user.id}" data-plan="lifetime">Permanente</button></span></div>`).join('');
+    panel.querySelectorAll('.admin-plan-button').forEach((button) => {
+      button.onclick = async () => {
+        await authenticatedFetch(`${apiBase}/api/v1/admin/users/${button.dataset.id}/plan`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan: button.dataset.plan }) });
+        renderAdminPanel();
+      };
+    });
   }
 
   async function onSessionChanged(nextSession) {
@@ -191,10 +137,7 @@
     }
     const response = await authenticatedFetch(`${apiBase}/api/v1/account`);
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({ detail: 'Error al consultar la cuenta.' }));
       await supabaseClient.auth.signOut();
-      if (!document.querySelector('#auth-shell')) createAuthShell();
-      showAuthError(errData.detail || 'Error al autenticar con el servidor.');
       return;
     }
     account = await response.json();

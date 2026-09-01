@@ -55,9 +55,9 @@ class AuthService:
                 "premium_until": None, "free_uses": {service: False for service in FREE_SERVICES},
                 "is_master": True,
             }
-        profile = await asyncio.to_thread(self._get_profile, user["id"])
+        profile = await asyncio.to_thread(self._get_profile, user["id"], str(user.get("email", "")))
         if not profile:
-            raise HTTPException(status_code=500, detail="No se encontró el perfil de la cuenta.")
+            raise HTTPException(status_code=500, detail="No se encontró ni se pudo crear el perfil de la cuenta. Verificá que la tabla user_profiles exista en Supabase ejecutando supabase_schema.sql.")
         return self._account_payload(user, profile)
 
     async def consume_or_reject(self, user: dict[str, Any], service: str) -> dict[str, Any]:
@@ -106,7 +106,7 @@ class AuthService:
             raise HTTPException(status_code=401, detail="La sesión no es válida o expiró.")
         return response.json()
 
-    def _get_profile(self, user_id: str) -> dict[str, Any] | None:
+    def _get_profile(self, user_id: str, email: str = "") -> dict[str, Any] | None:
         response = requests.get(
             f"{self.url}/rest/v1/user_profiles",
             params={"id": f"eq.{user_id}", "select": "*"},
@@ -115,7 +115,19 @@ class AuthService:
         )
         self._raise_database_error(response)
         rows = response.json()
-        return rows[0] if rows else None
+        if rows:
+            return rows[0]
+        if email:
+            insert_resp = requests.post(
+                f"{self.url}/rest/v1/user_profiles",
+                json={"id": user_id, "email": email.lower()},
+                headers=self._headers("return=representation"),
+                timeout=15,
+            )
+            if insert_resp.ok:
+                inserted = insert_resp.json()
+                return inserted[0] if inserted else None
+        return None
 
     def _consume_free_use(self, user_id: str, service: str) -> dict[str, Any] | None:
         response = requests.post(
