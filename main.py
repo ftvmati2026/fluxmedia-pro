@@ -56,6 +56,14 @@ async def root() -> FileResponse:
     return FileResponse(index_path)
 
 
+@app.get("/app")
+async def app_dashboard() -> FileResponse:
+    app_path = FRONTEND_DIR / "app.html"
+    if not app_path.exists():
+        raise HTTPException(status_code=404, detail="Frontend no encontrado.")
+    return FileResponse(app_path)
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     return JSONResponse(
