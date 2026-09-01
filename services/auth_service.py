@@ -86,10 +86,11 @@ class AuthService:
             raise HTTPException(status_code=404, detail="Usuario no encontrado.")
         return profile
 
-    def _headers(self, prefer: str | None = None) -> dict[str, str]:
+    def _headers(self, prefer: str | None = None, use_anon: bool = False) -> dict[str, str]:
+        key = self.anon_key if use_anon or not self.service_key else self.service_key
         headers = {
-            "apikey": self.service_key,
-            "Authorization": f"Bearer {self.service_key}",
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
         }
         if prefer:
@@ -113,17 +114,32 @@ class AuthService:
             headers=self._headers(),
             timeout=15,
         )
+        if response.status_code == 401 and self.anon_key:
+            response = requests.get(
+                f"{self.url}/rest/v1/user_profiles",
+                params={"id": f"eq.{user_id}", "select": "*"},
+                headers=self._headers(use_anon=True),
+                timeout=15,
+            )
         self._raise_database_error(response)
         rows = response.json()
         if rows:
             return rows[0]
         if email:
+            headers = self._headers("return=representation")
             insert_resp = requests.post(
                 f"{self.url}/rest/v1/user_profiles",
                 json={"id": user_id, "email": email.lower()},
-                headers=self._headers("return=representation"),
+                headers=headers,
                 timeout=15,
             )
+            if insert_resp.status_code == 401 and self.anon_key:
+                insert_resp = requests.post(
+                    f"{self.url}/rest/v1/user_profiles",
+                    json={"id": user_id, "email": email.lower()},
+                    headers=self._headers("return=representation", use_anon=True),
+                    timeout=15,
+                )
             if insert_resp.ok:
                 inserted = insert_resp.json()
                 return inserted[0] if inserted else None
@@ -136,6 +152,13 @@ class AuthService:
             headers=self._headers(),
             timeout=15,
         )
+        if response.status_code == 401 and self.anon_key:
+            response = requests.post(
+                f"{self.url}/rest/v1/rpc/consume_free_use",
+                json={"p_user_id": user_id, "p_service": service},
+                headers=self._headers(use_anon=True),
+                timeout=15,
+            )
         self._raise_database_error(response)
         rows = response.json()
         return rows[0] if rows else None
@@ -147,6 +170,13 @@ class AuthService:
             headers=self._headers(),
             timeout=15,
         )
+        if response.status_code == 401 and self.anon_key:
+            response = requests.get(
+                f"{self.url}/rest/v1/user_profiles",
+                params={"select": "*", "order": "created_at.desc"},
+                headers=self._headers(use_anon=True),
+                timeout=15,
+            )
         self._raise_database_error(response)
         return response.json()
 
@@ -165,6 +195,14 @@ class AuthService:
             headers=self._headers("return=representation"),
             timeout=15,
         )
+        if response.status_code == 401 and self.anon_key:
+            response = requests.patch(
+                f"{self.url}/rest/v1/user_profiles",
+                params={"id": f"eq.{user_id}"},
+                json=updates,
+                headers=self._headers("return=representation", use_anon=True),
+                timeout=15,
+            )
         self._raise_database_error(response)
         rows = response.json()
         return rows[0] if rows else None
