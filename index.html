@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07111f" />
+  <title>FluxMedia Pro | Convertí video y audio en texto en minutos</title>
+  <meta name="description" content="Extraé audio de tus videos y transcribí conversaciones a texto claro y editable. Video a audio, audio a texto, video a texto. Probalo gratis con tu cuenta de Google." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --ink:#eaf4ff; --cyan:#65e7f5; --panel:rgba(11,27,48,.66); --line:rgba(174,222,255,.16); --amber:#f6c667; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--ink); font-family:"DM Sans",sans-serif; background:#07111f; overflow-x:hidden; }
+    h1,h2,h3,.brand-name { font-family:"Space Grotesk",sans-serif; }
+    .scene { position:fixed; inset:0; z-index:-2; overflow:hidden; background:radial-gradient(circle at 50% -15%,#173a5f 0,#0a1a2e 38%,#050a14 100%); }
+    .scene:before,.scene:after { content:""; position:absolute; width:38rem; height:38rem; border-radius:50%; filter:blur(70px); opacity:.28; animation:float 16s ease-in-out infinite alternate; }
+    .scene:before { background:#13b9d1; top:-17rem; left:-12rem; }
+    .scene:after { background:#3c62e8; right:-15rem; top:28%; animation-delay:-6s; }
+    .grid-glow { position:absolute; inset:0; opacity:.22; background-image:linear-gradient(rgba(155,206,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(155,206,255,.08) 1px,transparent 1px); background-size:62px 62px; mask-image:linear-gradient(to bottom,black,transparent 78%); }
+    @keyframes float { to { transform:translate(4rem,3rem) scale(1.12); } }
+    @keyframes rise { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes pulse-line { 0%,100% { transform:translateX(-110%); } 50% { transform:translateX(210%); } }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .reveal { animation:rise .75s cubic-bezier(.2,.8,.2,1) both; }
+    .delay-1 { animation-delay:.12s; } .delay-2 { animation-delay:.24s; } .delay-3 { animation-delay:.36s; }
+    .glass { background:var(--panel); border:1px solid var(--line); box-shadow:0 24px 80px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.07); backdrop-filter:blur(24px); }
+    .brand-mark { width:52px; height:52px; object-fit:cover; object-position:center; border-radius:16px; background:#f7fbff; box-shadow:0 0 0 1px rgba(255,255,255,.35),0 12px 30px rgba(63,191,232,.2); }
+    .brand-name { letter-spacing:-.06em; }
+    .hero-orbit { position:absolute; right:2%; top:2rem; width:15rem; height:15rem; border:1px solid rgba(101,231,245,.22); border-radius:50%; transform:rotate(-18deg); opacity:.6; }
+    .hero-orbit:after { content:""; position:absolute; inset:22px; border:1px dashed rgba(120,161,255,.3); border-radius:50%; }
+
+    /* CTA button */
+    .action-button { position:relative; overflow:hidden; transition:transform .2s ease,box-shadow .2s ease,filter .2s ease; }
+    .action-button:after { content:""; position:absolute; inset:0; width:35%; background:rgba(255,255,255,.28); transform:translateX(-150%) skewX(-20deg); }
+    .action-button:hover { transform:translateY(-2px); filter:brightness(1.08); box-shadow:0 12px 24px rgba(0,0,0,.2); }
+    .action-button:hover:after { animation:pulse-line .7s ease; } .action-button:active { transform:translateY(0) scale(.98); }
+    .action-button.busy { pointer-events:none; opacity:.75; }
+    .action-button.busy .btn-label { display:none; } .action-button.busy .btn-loading { display:inline-flex; }
+    .btn-loading { display:none; align-items:center; justify-content:center; gap:.5rem; }
+    .spinner { width:1rem; height:1rem; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .7s linear infinite; }
+
+    .footer-link { transition:color .2s ease,transform .2s ease; } .footer-link:hover { color:var(--cyan); transform:translateY(-1px); }
+
+    /* Scroll reveal, applied once when a section enters the viewport */
+    .rv { opacity:0; transform:translateY(22px); transition:opacity .7s cubic-bezier(.2,.8,.2,1), transform .7s cubic-bezier(.2,.8,.2,1); }
+    .rv.in { opacity:1; transform:translateY(0); }
+
+    /* Signature hero visual: file becoming a waveform becoming text */
+    .pipe { position:relative; width:100%; max-width:30rem; }
+    .pipe-card { border-radius:22px; padding:1.25rem 1.4rem; }
+    .pipe-row { display:flex; align-items:center; gap:.9rem; }
+    .pipe-chip { flex:0 0 auto; width:2.6rem; height:2.6rem; border-radius:.9rem; display:grid; place-items:center; }
+    .wave-bars { display:flex; align-items:flex-end; gap:3px; height:2rem; flex:1; }
+    .wave-bars span { flex:1; background:linear-gradient(180deg,var(--cyan),#3c62e8); border-radius:2px; animation:wave 1.6s ease-in-out infinite; }
+    @keyframes wave { 0%,100% { height:22%; } 50% { height:100%; } }
+    .type-line { position:relative; height:.62rem; border-radius:4px; background:rgba(255,255,255,.09); overflow:hidden; }
+    .type-line span { position:absolute; inset:0; background:linear-gradient(90deg,rgba(101,231,245,.55),rgba(101,231,245,0)); transform-origin:left; animation:typewrite 2.4s ease-in-out infinite; }
+    @keyframes typewrite { 0% { transform:scaleX(0);} 45% { transform:scaleX(1);} 55% { transform:scaleX(1);} 100% { transform:scaleX(0); transform-origin:right;} }
+    .arrow-flow { position:relative; height:1px; background:linear-gradient(90deg,transparent,rgba(174,222,255,.4),transparent); margin:.9rem 0; overflow:hidden; }
+    .arrow-flow:after { content:""; position:absolute; top:-3px; width:10px; height:7px; background:var(--cyan); clip-path:polygon(0 0,100% 50%,0 100%); animation:flow 2.2s linear infinite; }
+    @keyframes flow { from { left:-5%; } to { left:100%; } }
+
+    .step-num { font-family:"Space Grotesk",sans-serif; font-size:2.1rem; font-weight:700; line-height:1; color:rgba(234,244,255,.28); }
+
+    @media (max-width:640px) { .hero-orbit { right:-6rem; top:1rem; opacity:.3; } .brand-mark { width:44px; height:44px; } }
+    @media (prefers-reduced-motion:reduce) { *,*:before,*:after { animation-duration:.01ms!important; animation-iteration-count:1!important; scroll-behavior:auto!important; } .rv { opacity:1!important; transform:none!important; } }
+  </style>
+</head>
+<body>
+  <div class="scene"><div class="grid-glow"></div></div>
+
+  <header class="mx-auto flex max-w-7xl items-center justify-between px-5 py-6 sm:px-8 lg:px-12">
+    <a href="#inicio" class="reveal flex items-center gap-3" aria-label="FluxMedia Pro, inicio">
+      <img class="brand-mark" src="/static/assets/fluxmedia-pro.jpg" alt="Logo FluxMedia Pro" />
+      <div>
+        <div class="brand-name text-lg font-bold tracking-tight sm:text-xl">FluxMedia <span class="text-cyan-300">Pro</span></div>
+        <div class="text-[10px] uppercase tracking-[.28em] text-slate-400">Media intelligence</div>
+      </div>
+    </a>
+    <nav class="reveal delay-1 hidden items-center gap-7 text-sm text-slate-300 md:flex">
+      <a class="transition hover:text-white" href="#como-funciona">Cómo funciona</a>
+      <a class="transition hover:text-white" href="#herramientas">Herramientas</a>
+      <a class="transition hover:text-white" href="#casos">Para quién es</a>
+    </nav>
+    <button id="btn-login-header" class="action-button reveal delay-2 rounded-full border border-cyan-200/25 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 sm:text-sm">
+      <span class="btn-label">Iniciar sesión</span>
+      <span class="btn-loading"><span class="spinner"></span>Conectando</span>
+    </button>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
+
+    <!-- HERO -->
+    <section id="inicio" class="relative grid gap-14 pb-24 pt-10 sm:pb-28 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:pt-16">
+      <div class="hero-orbit"></div>
+      <div class="relative">
+        <div class="reveal mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1.5 text-xs font-semibold text-cyan-200">
+          <span class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span> Video, audio y texto en un mismo lugar
+        </div>
+        <h1 class="reveal delay-1 text-4xl font-semibold leading-[1.03] tracking-[-.04em] text-white sm:text-6xl">
+          Lo que se dice en tus videos, convertido en texto listo para usar.
+        </h1>
+        <p class="reveal delay-2 mt-6 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
+          Subís un video o un audio y FluxMedia Pro te devuelve exactamente lo que necesitás: la pista de sonido en MP3, o la transcripción completa en texto, ordenada y lista para copiar.
+        </p>
+        <div class="reveal delay-3 mt-9 flex flex-col gap-4 sm:flex-row sm:items-center">
+          <button id="btn-login-hero" class="action-button inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-300 px-6 py-3.5 font-bold text-slate-950">
+            <span class="btn-label flex items-center gap-2">
+              <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34 4.9 29.3 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.2-2.7-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.6 15.5 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34 4.9 29.3 3 24 3c-7.4 0-13.7 4.2-16.9 10.3z"/><path fill="#4CAF50" d="M24 45c5.2 0 9.9-1.8 13.6-4.7l-6.3-5.3C29.2 36.6 26.7 37.5 24 37.5c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.3 40.8 16.1 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.3 5.3C40.5 36.4 43 30.7 43 24c0-1.4-.2-2.7-.4-3.5z"/></svg>
+              Probar gratis con Google
+            </span>
+            <span class="btn-loading"><span class="spinner"></span>Conectando</span>
+          </button>
+          <a href="#herramientas" class="text-sm font-semibold text-slate-300 underline decoration-cyan-300/40 underline-offset-4 transition hover:text-white">Ver ejemplos primero</a>
+        </div>
+        <p class="reveal delay-3 mt-4 text-xs text-slate-500">Sin instalar nada. Una prueba gratuita de cada herramienta.</p>
+      </div>
+
+      <!-- signature animated visual -->
+      <div class="reveal delay-2 flex justify-center lg:justify-end">
+        <div class="pipe glass pipe-card">
+          <p class="mb-4 text-xs font-semibold uppercase tracking-[.2em] text-slate-400">entrevista_final.mp4</p>
+          <div class="pipe-row">
+            <div class="pipe-chip bg-white/10 text-slate-200">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M15 10l4.55-2.9A1 1 0 0 1 21 8v8a1 1 0 0 1-1.45.9L15 14M4 6h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z"/></svg>
+            </div>
+            <div class="wave-bars" aria-hidden="true">
+              <span style="animation-delay:.0s"></span><span style="animation-delay:.1s"></span><span style="animation-delay:.2s"></span><span style="animation-delay:.05s"></span><span style="animation-delay:.3s"></span><span style="animation-delay:.15s"></span><span style="animation-delay:.25s"></span><span style="animation-delay:.08s"></span>
+            </div>
+          </div>
+          <div class="arrow-flow"></div>
+          <div class="pipe-row items-start">
+            <div class="pipe-chip bg-emerald-300/15 text-emerald-200">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M4 6h16M4 12h16M4 18h10"/></svg>
+            </div>
+            <div class="flex-1 space-y-2 pt-1">
+              <div class="type-line" style="width:96%"><span></span></div>
+              <div class="type-line" style="width:82%; animation-delay:.4s"><span style="animation-delay:.4s"></span></div>
+              <div class="type-line" style="width:64%; animation-delay:.8s"><span style="animation-delay:.8s"></span></div>
+            </div>
+          </div>
+          <p class="mt-4 text-xs text-slate-500">Video → audio → texto, en el mismo archivo.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRUST STRIP -->
+    <section class="rv grid grid-cols-2 gap-4 border-y border-white/10 py-8 text-center sm:grid-cols-4">
+      <div><p class="brand-name text-2xl font-bold text-white sm:text-3xl">3</p><p class="mt-1 text-xs text-slate-400">Herramientas en un solo lugar</p></div>
+      <div><p class="brand-name text-2xl font-bold text-white sm:text-3xl">Español</p><p class="mt-1 text-xs text-slate-400">Optimizado para acentos locales</p></div>
+      <div><p class="brand-name text-2xl font-bold text-white sm:text-3xl">0 instalación</p><p class="mt-1 text-xs text-slate-400">Todo se procesa en la web</p></div>
+      <div><p class="brand-name text-2xl font-bold text-white sm:text-3xl">Minutos</p><p class="mt-1 text-xs text-slate-400">De archivo pesado a texto listo</p></div>
+    </section>
+
+    <!-- COMO FUNCIONA -->
+    <section id="como-funciona" class="py-20 sm:py-28">
+      <div class="rv mb-12 max-w-xl">
+        <h2 class="text-3xl font-semibold tracking-[-.03em] text-white sm:text-4xl">Tres pasos, un resultado limpio</h2>
+        <p class="mt-3 text-slate-300">No hay configuraciones raras ni curva de aprendizaje: elegís la herramienta, soltás el archivo y esperás.</p>
+      </div>
+      <div class="grid gap-8 sm:grid-cols-3">
+        <div class="rv">
+          <span class="step-num">01</span>
+          <h3 class="mt-3 text-lg font-semibold text-white">Elegís tu archivo</h3>
+          <p class="mt-2 text-sm leading-6 text-slate-400">Arrastrás un video o un audio a la herramienta que necesitás: pasarlo a MP3, o transcribirlo a texto.</p>
+        </div>
+        <div class="rv">
+          <span class="step-num">02</span>
+          <h3 class="mt-3 text-lg font-semibold text-white">Lo procesamos por vos</h3>
+          <p class="mt-2 text-sm leading-6 text-slate-400">FluxMedia Pro separa el audio y transcribe cada palabra, incluso con varios interlocutores hablando.</p>
+        </div>
+        <div class="rv">
+          <span class="step-num">03</span>
+          <h3 class="mt-3 text-lg font-semibold text-white">Copiás o descargás</h3>
+          <p class="mt-2 text-sm leading-6 text-slate-400">Tu archivo MP3 o tu texto queda listo para copiar, descargar o pegar donde lo necesites.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- HERRAMIENTAS / EJEMPLOS -->
+    <section id="herramientas" class="py-4 sm:py-10">
+      <div class="rv mb-12 max-w-xl">
+        <h2 class="text-3xl font-semibold tracking-[-.03em] text-white sm:text-4xl">Tres formas de aprovechar tu contenido</h2>
+        <p class="mt-3 text-slate-300">Así se ve cada conversión en la práctica.</p>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-3">
+        <article class="rv glass rounded-[26px] p-6">
+          <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300/15 text-cyan-200">
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 19V6l10-3v13M9 19a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm10-3a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+          </div>
+          <h3 class="text-xl font-semibold text-white">Video a audio</h3>
+          <p class="mt-2 text-sm text-slate-400">Ideal cuando solo te interesa el sonido: una charla grabada en video, un podcast filmado, una clase.</p>
+          <div class="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Entra</p>
+            <p class="text-sm text-slate-300">clase_finanzas.mp4 · 480 MB</p>
+            <div class="my-3 h-px bg-white/10"></div>
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Sale</p>
+            <p class="text-sm text-cyan-200">clase_finanzas.mp3 · 42 MB</p>
+          </div>
+        </article>
+
+        <article class="rv glass rounded-[26px] p-6">
+          <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-300/15 text-emerald-200">
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M12 18.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Zm0 0V22m-4-7 4-4 4 4M5 3l1.5 1.5M19 3l-1.5 1.5"/></svg>
+          </div>
+          <h3 class="text-xl font-semibold text-white">Audio a texto</h3>
+          <p class="mt-2 text-sm text-slate-400">Notas de voz, entrevistas grabadas o reuniones: las convertís en texto para leer, buscar o citar.</p>
+          <div class="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Entra</p>
+            <p class="text-sm text-slate-300">nota_reunion.mp3 · 8 min</p>
+            <div class="my-3 h-px bg-white/10"></div>
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Sale</p>
+            <p class="text-sm leading-5 text-emerald-200">"Quedamos en enviar la propuesta el viernes y coordinar con el equipo de diseño..."</p>
+          </div>
+        </article>
+
+        <article class="rv glass rounded-[26px] p-6">
+          <div class="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-300/15 text-amber-200">
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="m15 10-4 4-4-4m4 4V3m7 5h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1"/></svg>
+          </div>
+          <h3 class="text-xl font-semibold text-white">Video a texto</h3>
+          <p class="mt-2 text-sm text-slate-400">Sin pasos intermedios: subís el video directamente y obtenés la transcripción completa.</p>
+          <div class="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Entra</p>
+            <p class="text-sm text-slate-300">entrevista.mov · 22 min</p>
+            <div class="my-3 h-px bg-white/10"></div>
+            <p class="text-[11px] uppercase tracking-wide text-slate-500">Sale</p>
+            <p class="text-sm leading-5 text-amber-200">"Empezamos el proyecto en marzo, con un equipo de cuatro personas..."</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- CASOS DE USO -->
+    <section id="casos" class="py-20 sm:py-28">
+      <div class="rv mb-12 max-w-xl">
+        <h2 class="text-3xl font-semibold tracking-[-.03em] text-white sm:text-4xl">Para quién es</h2>
+        <p class="mt-3 text-slate-300">Cualquiera que trabaje con contenido hablado y necesite pasarlo a texto o a un formato más liviano.</p>
+      </div>
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="rv glass rounded-2xl p-5">
+          <h3 class="font-semibold text-white">Periodistas</h3>
+          <p class="mt-2 text-sm text-slate-400">Transcribí entrevistas para citar con precisión, sin volver a escuchar todo el audio.</p>
+        </div>
+        <div class="rv glass rounded-2xl p-5">
+          <h3 class="font-semibold text-white">Creadores de contenido</h3>
+          <p class="mt-2 text-sm text-slate-400">Sacá subtítulos o textos de tus videos para redes, blogs o newsletters.</p>
+        </div>
+        <div class="rv glass rounded-2xl p-5">
+          <h3 class="font-semibold text-white">Equipos y estudiantes</h3>
+          <p class="mt-2 text-sm text-slate-400">Convertí clases y reuniones grabadas en apuntes que se pueden buscar y compartir.</p>
+        </div>
+        <div class="rv glass rounded-2xl p-5">
+          <h3 class="font-semibold text-white">Cualquiera con un video pesado</h3>
+          <p class="mt-2 text-sm text-slate-400">Quedate solo con el audio en MP3 cuando no necesitás la imagen.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA FINAL -->
+    <section class="rv relative overflow-hidden rounded-[32px] py-16 text-center glass sm:py-20">
+      <h2 class="mx-auto max-w-2xl px-6 text-3xl font-semibold tracking-[-.03em] text-white sm:text-4xl">
+        Probá FluxMedia Pro con tu cuenta de Google
+      </h2>
+      <p class="mx-auto mt-4 max-w-md px-6 text-slate-300">Entrás en segundos, sin formularios largos, y tenés una prueba gratuita de cada herramienta.</p>
+      <button id="btn-login-cta" class="action-button mx-auto mt-8 inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-300 px-7 py-3.5 font-bold text-slate-950">
+        <span class="btn-label flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34 4.9 29.3 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.2-2.7-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.6 15.5 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34 4.9 29.3 3 24 3c-7.4 0-13.7 4.2-16.9 10.3z"/><path fill="#4CAF50" d="M24 45c5.2 0 9.9-1.8 13.6-4.7l-6.3-5.3C29.2 36.6 26.7 37.5 24 37.5c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.3 40.8 16.1 45 24 45z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.3 5.3C40.5 36.4 43 30.7 43 24c0-1.4-.2-2.7-.4-3.5z"/></svg>
+          Continuar con Google
+        </span>
+        <span class="btn-loading"><span class="spinner"></span>Conectando</span>
+      </button>
+      <p class="mt-4 text-xs text-slate-500">¿Ya tenés cuenta? El mismo botón te lleva directo a tu panel.</p>
+    </section>
+
+    <footer class="border-t border-white/10 py-10 text-center text-sm text-slate-400">
+      <p>Diseñado y Desarrollado en su totalidad por <strong class="text-white">Matías Gómez</strong></p>
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
+        <a class="footer-link inline-flex items-center gap-2" href="https://wa.me/5492612404479" target="_blank" rel="noreferrer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.08 0C5.55 0 .24 5.31.24 11.84c0 2.09.55 4.13 1.6 5.93L.14 24l6.38-1.67a11.8 11.8 0 0 0 5.56 1.41h.01c6.53 0 11.84-5.31 11.84-11.84 0-3.17-1.23-6.14-3.43-8.4Zm-8.42 18.2h-.01a9.8 9.8 0 0 1-5-1.37l-.36-.22-3.78.99 1.01-3.68-.24-.38a9.82 9.82 0 1 1 8.38 4.66Zm5.39-7.37c-.29-.15-1.7-.84-1.96-.94-.26-.1-.45-.15-.64.15-.19.29-.74.94-.91 1.13-.17.19-.33.22-.62.07-.29-.15-1.2-.44-2.29-1.42-.85-.76-1.42-1.7-1.59-1.99-.17-.29-.02-.45.13-.6.13-.13.29-.33.43-.49.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.07-.15-.64-1.55-.88-2.13-.23-.56-.47-.48-.64-.49h-.54c-.19 0-.49.07-.74.36-.26.29-.98.96-.98 2.34s1.01 2.72 1.15 2.91c.15.19 1.99 3.04 4.83 4.27.67.29 1.2.47 1.61.6.68.22 1.3.19 1.79.12.55-.08 1.7-.7 1.94-1.37.24-.67.24-1.25.17-1.37-.07-.12-.26-.19-.55-.34Z"/></svg>
+          <span>+54 9 261 240 4479</span>
+        </a>
+        <a class="footer-link inline-flex items-center gap-2" href="mailto:ftvmati2022@gmail.com">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" d="M3 6.75A1.75 1.75 0 0 1 4.75 5h14.5A1.75 1.75 0 0 1 21 6.75v10.5A1.75 1.75 0 0 1 19.25 19H4.75A1.75 1.75 0 0 1 3 17.25V6.75Zm1 0 8 6 8-6"/></svg>
+          <span>ftvmati2022@gmail.com</span>
+        </a>
+      </div>
+      <p class="mt-5 text-xs text-slate-600">FluxMedia Pro · Procesamiento multimedia inteligente</p>
+    </footer>
+  </main>
+
+  <script>
+    const apiBase = window.location.origin;
+    let supabaseClient = null;
+    let authEnabled = false;
+
+    async function initAuth() {
+      try {
+        const config = await fetch(`${apiBase}/api/v1/auth/config`).then((r) => r.json());
+        authEnabled = Boolean(config.enabled && config.supabase_anon_key);
+        if (authEnabled) {
+          supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);
+        }
+      } catch (err) {
+        authEnabled = false;
+      }
+    }
+
+    async function goToApp(button) {
+      if (!authEnabled || !supabaseClient) {
+        window.location.href = `${apiBase}/app`;
+        return;
+      }
+      button.classList.add('busy');
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${apiBase}/app` }
+      });
+      if (error) {
+        button.classList.remove('busy');
+        window.location.href = `${apiBase}/app`;
+      }
+    }
+
+    ['btn-login-header', 'btn-login-hero', 'btn-login-cta'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', () => goToApp(el));
+    });
+
+    initAuth();
+
+    // scroll reveal
+    const revealTargets = document.querySelectorAll('.rv');
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) { entry.target.classList.add('in'); io.unobserve(entry.target); }
+        });
+      }, { threshold: 0.15 });
+      revealTargets.forEach((el) => io.observe(el));
+    } else {
+      revealTargets.forEach((el) => el.classList.add('in'));
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</body>
+</html>
