@@ -69,12 +69,12 @@
     function setSelectedFile(input) { const zone = input.closest('[data-drop-zone]'); const label = zone.querySelector('.file-label'); const file = input.files[0]; zone.classList.toggle('has-file', Boolean(file)); label.textContent = file ? `${file.name} · ${formatBytes(file.size)}` : 'Arrastra tu archivo aquí'; }
     function formatBytes(bytes) { if (!bytes) return '0 B'; const units = ['B','KB','MB','GB']; const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1); return `${(bytes / (1024 ** index)).toFixed(index ? 1 : 0)} ${units[index]}`; }
     function setupDropZones() { document.querySelectorAll('[data-drop-zone]').forEach((zone) => { const input = zone.querySelector('input[type="file"]'); input.addEventListener('change', () => setSelectedFile(input)); ['dragenter','dragover'].forEach((name) => zone.addEventListener(name, (event) => { event.preventDefault(); zone.classList.add('is-dragging'); })); ['dragleave','drop'].forEach((name) => zone.addEventListener(name, (event) => { event.preventDefault(); zone.classList.remove('is-dragging'); })); zone.addEventListener('drop', (event) => { if (event.dataTransfer.files.length) { input.files = event.dataTransfer.files; setSelectedFile(input); } }); }); }
-    async function pollJob(jobId, elapsedText, progressBar) {
+    async function pollJob(jobId, jobMessage, progressBar) {
       while (true) {
         const response = await fetch(`${apiBase}/api/v1/jobs/${jobId}`);
         const job = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(job.error || job.detail || 'No se pudo consultar el estado del procesamiento.');
-        elapsedText.textContent = job.message || 'Procesando...';
+        jobMessage.textContent = job.message || 'Procesando...';
         progressBar.style.width = `${Math.max(8, job.progress || 8)}%`;
         if (job.status === 'completed') return job.result;
         if (job.status === 'failed') throw new Error(job.error || 'El procesamiento no pudo completarse.');
@@ -94,8 +94,9 @@
 
         const startedAt = Date.now();
         button.classList.add('busy');
-        result.innerHTML = '<div class="space-y-2"><div class="flex items-center justify-between"><span>Analizando tu archivo...</span><span class="elapsed-text">0 s</span></div><div class="h-1.5 overflow-hidden rounded-full bg-slate-800"><div class="progress-bar h-full w-1/3 rounded-full bg-cyan-300"></div></div><p class="text-xs text-slate-500">Si el servicio estaba inactivo, Render puede tardar unos segundos en despertarlo.</p></div>';
+        result.innerHTML = '<div class="space-y-2"><div class="flex items-center justify-between gap-3"><span class="job-message">Analizando tu archivo...</span><span class="elapsed-text shrink-0">0 s</span></div><div class="h-1.5 overflow-hidden rounded-full bg-slate-800"><div class="progress-bar h-full w-1/3 rounded-full bg-cyan-300"></div></div><p class="text-xs text-slate-500">Si el servicio estaba inactivo, Render puede tardar unos segundos en despertarlo.</p></div>';
         const progressBar = result.querySelector('.progress-bar');
+        const jobMessage = result.querySelector('.job-message');
         const elapsedText = result.querySelector('.elapsed-text');
         const progressTimer = window.setInterval(() => {
           const seconds = Math.floor((Date.now() - startedAt) / 1000);
@@ -111,9 +112,9 @@
           if (!expectsFile && response.status === 202) {
             const job = await response.json().catch(() => ({}));
             if (!job.job_id) throw new Error('El servidor no devolvió el identificador del trabajo.');
-            elapsedText.textContent = 'Trabajo en segundo plano iniciado...';
+            jobMessage.textContent = 'Trabajo en segundo plano iniciado...';
             progressBar.style.width = `${job.progress || 5}%`;
-            completedResult = await pollJob(job.job_id, elapsedText, progressBar);
+            completedResult = await pollJob(job.job_id, jobMessage, progressBar);
           }
           if (!response.ok) {
             const error = await response.json().catch(() => ({}));
