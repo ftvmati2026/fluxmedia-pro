@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import subprocess
@@ -37,6 +38,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "whisper-large-v3-turbo")
 GROQ_CHUNK_SECONDS = 480
 OUTPUT_AUDIO_FORMAT = os.getenv("OUTPUT_AUDIO_FORMAT", "mp3").lower()
+logger = logging.getLogger("media-processing")
 
 
 @dataclass(frozen=True)
@@ -73,20 +75,32 @@ class MediaProcessingService:
         await self._validate_upload(file, allowed=AUDIO_EXTENSIONS, audio_input=True)
         input_path = await self._persist_upload(file, suffix=Path(file.filename or "").suffix)
         try:
-            if TRANSCRIPTION_PROVIDER == "groq":
-                with self.temp_manager.managed_temp_path(suffix=".wav") as normalized_path:
-                    await asyncio.to_thread(self._normalize_audio_ffmpeg, input_path, normalized_path)
-                    segments, full_text = await asyncio.to_thread(self._transcribe, normalized_path)
-            else:
-                segments, full_text = await asyncio.to_thread(self._transcribe, input_path)
-            return {
-                "text_full": self._format_transcript(segments, full_text),
-                "segments": [segment.__dict__ for segment in segments],
-                "language": "es",
-                "model": WHISPER_MODEL_SIZE,
-            }
+            return await self.audio_path_to_text(input_path)
         finally:
             self.temp_manager.safe_delete(input_path)
+
+    async def prepare_audio_upload(self, file: UploadFile) -> Path:
+        await self._validate_upload(file, allowed=AUDIO_EXTENSIONS, audio_input=True)
+        return await self._persist_upload(file, suffix=Path(file.filename or "").suffix)
+
+    async def audio_path_to_text(self, input_path: Path) -> dict[str, Any]:
+        logger.info("stage=transcription_start provider=%s file=%s", TRANSCRIPTION_PROVIDER, input_path.name)
+        if TRANSCRIPTION_PROVIDER == "groq":
+            with self.temp_manager.managed_temp_path(suffix=".wav") as normalized_path:
+                logger.info("stage=ffmpeg_normalize file=%s", input_path.name)
+                await asyncio.to_thread(self._normalize_audio_ffmpeg, input_path, normalized_path)
+                logger.info("stage=provider_request provider=groq file=%s", normalized_path.name)
+                segments, full_text = await asyncio.to_thread(self._transcribe, normalized_path)
+        else:
+            logger.info("stage=provider_request provider=local file=%s", input_path.name)
+            segments, full_text = await asyncio.to_thread(self._transcribe, input_path)
+        logger.info("stage=transcription_complete provider=%s file=%s", TRANSCRIPTION_PROVIDER, input_path.name)
+        return {
+            "text_full": self._format_transcript(segments, full_text),
+            "segments": [segment.__dict__ for segment in segments],
+            "language": "es",
+            "model": WHISPER_MODEL_SIZE,
+        }
 
     async def video_to_text(self, file: UploadFile) -> dict[str, Any]:
         await self._validate_upload(file, allowed=VIDEO_EXTENSIONS)
@@ -296,6 +310,7 @@ class MediaProcessingService:
 
     def _transcribe_with_groq_single(self, audio_path: Path, offset_seconds: int) -> tuple[list[TranscriptSegment], str]:
         try:
+            logger.info("stage=groq_request file=%s offset=%s", audio_path.name, offset_seconds)
             with audio_path.open("rb") as audio_file:
                 response = requests.post(
                     "https://api.groq.com/openai/v1/audio/transcriptions",
@@ -311,6 +326,7 @@ class MediaProcessingService:
                 )
             response.raise_for_status()
             payload = response.json()
+            logger.info("stage=groq_response file=%s status=%s", audio_path.name, response.status_code)
         except requests.Timeout as exc:
             raise HTTPException(status_code=504, detail="La transcripción tardó demasiado. Intenta nuevamente.") from exc
         except requests.RequestException as exc:

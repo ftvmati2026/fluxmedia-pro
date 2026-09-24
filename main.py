@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from services.cleanup_service import TempFileManager
 from services.auth_service import auth_service, get_current_user
+from services.job_service import job_service
 from services.media_service import MediaProcessingService
 
 
@@ -101,6 +103,11 @@ async def admin_users(user=Depends(get_current_user)) -> JSONResponse:
     return JSONResponse(await auth_service.admin_users(user))
 
 
+@app.get("/api/v1/jobs/{job_id}")
+async def job_status(job_id: str, user=Depends(get_current_user)) -> JSONResponse:
+    return JSONResponse(await job_service.get_for_user(job_id, user["id"]))
+
+
 @app.patch("/api/v1/admin/users/{user_id}/plan")
 async def admin_set_plan(user_id: str, payload: dict[str, str], user=Depends(get_current_user)) -> JSONResponse:
     return JSONResponse(await auth_service.admin_set_plan(user, user_id, payload.get("plan", "")))
@@ -130,30 +137,48 @@ async def video_to_audio(background_tasks: BackgroundTasks, file: UploadFile = F
         raise HTTPException(status_code=500, detail=f"Error procesando video a audio: {exc}") from exc
 
 
-@app.post("/api/v1/audio-to-text")
+@app.post("/api/v1/audio-to-text", status_code=202)
 async def audio_to_text(file: UploadFile = File(...), user=Depends(get_current_user)) -> JSONResponse:
-    try:
-        await auth_service.consume_or_reject(user, "audio_to_text")
-        result = await media_service.audio_to_text(file)
-        return JSONResponse(result)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Error in audio_to_text")
-        raise HTTPException(status_code=500, detail=f"Error transcribiendo audio: {exc}") from exc
+    input_path = await media_service.prepare_audio_upload(file)
+
+    async def runner(update):
+        try:
+            update(30, "Normalizando el audio con FFmpeg...")
+            update(45, "Enviando el audio al motor de transcripción...")
+            result = await media_service.audio_path_to_text(input_path)
+            update(90, "Preparando el texto final...")
+            await auth_service.consume_or_reject(user, "audio_to_text")
+            return result
+        finally:
+            temp_manager.safe_delete(input_path)
+
+    job = await job_service.create(user["id"], "audio_to_text", runner)
+    return JSONResponse({"job_id": job.id, "status": job.status, "progress": job.progress}, status_code=202)
 
 
-@app.post("/api/v1/video-to-text")
+@app.post("/api/v1/video-to-text", status_code=202)
 async def video_to_text(file: UploadFile = File(...), user=Depends(get_current_user)) -> JSONResponse:
     try:
-        await auth_service.consume_or_reject(user, "video_to_text")
-        result = await media_service.video_to_text(file)
-        return JSONResponse(result)
-    except HTTPException:
+        await media_service._validate_upload(file, allowed={".mp4", ".mov", ".avi", ".mkv"})
+        input_path = await media_service._persist_upload(file, suffix=Path(file.filename or "").suffix)
+    except Exception:
         raise
-    except Exception as exc:
-        logger.exception("Error in video_to_text")
-        raise HTTPException(status_code=500, detail=f"Error transcribiendo video: {exc}") from exc
+
+    async def runner(update):
+        try:
+            update(25, "Extrayendo el audio del video...")
+            with media_service.temp_manager.managed_temp_path(suffix=".mp3") as audio_path:
+                await asyncio.to_thread(media_service._extract_audio_ffmpeg, input_path, audio_path)
+                update(50, "Enviando el audio al motor de transcripción...")
+                result = await media_service.audio_path_to_text(audio_path)
+            update(90, "Preparando el texto final...")
+            await auth_service.consume_or_reject(user, "video_to_text")
+            return result
+        finally:
+            temp_manager.safe_delete(input_path)
+
+    job = await job_service.create(user["id"], "video_to_text", runner)
+    return JSONResponse({"job_id": job.id, "status": job.status, "progress": job.progress}, status_code=202)
 
 
 @app.exception_handler(HTTPException)
