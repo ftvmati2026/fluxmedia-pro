@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -10,6 +11,7 @@ from fastapi import HTTPException, Request
 
 
 FREE_SERVICES = ("video_to_audio", "audio_to_text", "video_to_text")
+logger = logging.getLogger("auth-service")
 PLAN_LABELS = {
     "free": "Cuenta gratuita",
     "premium": "Premium",
@@ -98,13 +100,19 @@ class AuthService:
         return headers
 
     def _get_supabase_user(self, authorization: str) -> dict[str, Any]:
-        response = requests.get(
-            f"{self.url}/auth/v1/user",
-            headers={"apikey": self.anon_key, "Authorization": authorization},
-            timeout=15,
-        )
+        logger.info("stage=supabase_session_validation_start")
+        try:
+            response = requests.get(
+                f"{self.url}/auth/v1/user",
+                headers={"apikey": self.anon_key, "Authorization": authorization},
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            logger.warning("stage=supabase_session_validation_failed reason=%s", type(exc).__name__)
+            raise HTTPException(status_code=503, detail="No se pudo validar la sesión con Supabase.") from exc
         if response.status_code != 200:
             raise HTTPException(status_code=401, detail="La sesión no es válida o expiró.")
+        logger.info("stage=supabase_session_validation_complete")
         return response.json()
 
     def _get_profile(self, user_id: str, email: str = "") -> dict[str, Any] | None:

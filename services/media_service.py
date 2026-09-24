@@ -124,6 +124,7 @@ class MediaProcessingService:
         path = Path(raw_path)
         self.temp_manager.track(path)
         total = 0
+        logger.info("stage=upload_persist_start filename=%s", file.filename)
 
         try:
             with path.open("wb") as buffer:
@@ -141,6 +142,7 @@ class MediaProcessingService:
         finally:
             await file.close()
 
+        logger.info("stage=upload_persist_complete filename=%s bytes=%s", file.filename, total)
         return path
 
     async def _validate_upload(self, file: UploadFile, allowed: set[str], audio_input: bool = False) -> None:
@@ -322,7 +324,7 @@ class MediaProcessingService:
                         "response_format": "verbose_json",
                         "temperature": "0",
                     },
-                    timeout=(30, 600),
+                    timeout=30,
                 )
             response.raise_for_status()
             payload = response.json()

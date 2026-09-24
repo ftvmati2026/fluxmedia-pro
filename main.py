@@ -21,7 +21,7 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("media-app")
-APP_VERSION = os.getenv("APP_VERSION", "groq-chunking-v2")
+APP_VERSION = os.getenv("APP_VERSION", "async-jobs-v3")
 
 
 app = FastAPI(
@@ -139,7 +139,9 @@ async def video_to_audio(background_tasks: BackgroundTasks, file: UploadFile = F
 
 @app.post("/api/v1/audio-to-text", status_code=202)
 async def audio_to_text(file: UploadFile = File(...), user=Depends(get_current_user)) -> JSONResponse:
+    logger.info("stage=audio_request_received user=%s filename=%s", user["id"], file.filename)
     input_path = await media_service.prepare_audio_upload(file)
+    logger.info("stage=audio_upload_persisted user=%s file=%s", user["id"], input_path.name)
 
     async def runner(update):
         try:
@@ -153,6 +155,7 @@ async def audio_to_text(file: UploadFile = File(...), user=Depends(get_current_u
             temp_manager.safe_delete(input_path)
 
     job = await job_service.create(user["id"], "audio_to_text", runner)
+    logger.info("stage=audio_job_accepted user=%s job=%s", user["id"], job.id)
     return JSONResponse({"job_id": job.id, "status": job.status, "progress": job.progress}, status_code=202)
 
 
