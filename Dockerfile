@@ -15,5 +15,6 @@ RUN python -m pip install --upgrade pip \
 
 COPY . .
 
-EXPOSE 8000
-CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+EXPOSE 10000
+# Render supplies PORT at runtime. exec makes Uvicorn the container's main process.
+CMD ["sh", "-c", "exec python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000} --timeout-keep-alive 75"]
