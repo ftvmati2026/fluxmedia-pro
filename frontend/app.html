@@ -90,7 +90,25 @@
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const file = form.querySelector('input[type="file"]').files[0];
-        if (!file) { result.innerHTML = '<p class="text-amber-200">Selecciona o arrastra un archivo primero.</p>'; return; }
+        if (!file) {
+          console.error('FluxMedia upload blocked: no file selected');
+          result.innerHTML = '<p class="text-amber-200">Seleccioná o arrastrá un archivo primero.</p>';
+          return;
+        }
+        const extension = `.${(file.name.split('.').pop() || '').toLowerCase()}`;
+        const allowedExtensions = endpoint.includes('video')
+          ? new Set(['.mp4', '.mov', '.avi', '.mkv'])
+          : new Set(['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.oga', '.opus', '.wma', '.aiff', '.aif', '.ape', '.amr', '.3gp', '.3gpp', '.mka', '.webm', '.weba', '.ac3', '.caf', '.au', '.snd']);
+        if (!allowedExtensions.has(extension)) {
+          console.error('FluxMedia upload blocked: unsupported extension', { name: file.name, type: file.type });
+          result.innerHTML = `<p class="text-rose-300">Formato no compatible: ${escapeHtml(extension || 'sin extensión')}.</p>`;
+          return;
+        }
+        if (file.size > 1024 * 1024 * 1024) {
+          console.error('FluxMedia upload blocked: file too large', { name: file.name, size: file.size });
+          result.innerHTML = '<p class="text-rose-300">El archivo supera el límite de 1 GB.</p>';
+          return;
+        }
 
         const startedAt = Date.now();
         let jobStarted = false;
@@ -108,7 +126,10 @@
         formData.append('file', file);
 
         try {
-          const response = await fetch(`${apiBase}${endpoint}`, { method: 'POST', body: formData });
+          const request = window.fluxAuthenticatedFetch || window.fetch.bind(window);
+          console.info('FluxMedia upload started', { endpoint, name: file.name, size: file.size, type: file.type });
+          const response = await request(`${apiBase}${endpoint}`, { method: 'POST', body: formData });
+          console.info('FluxMedia upload response', { endpoint, status: response.status });
           let completedResult = null;
           if (!expectsFile && response.status === 202) {
             const job = await response.json().catch(() => ({}));
@@ -136,6 +157,7 @@
             result.querySelector('.download-btn').onclick = () => { const blob = new Blob([text], { type:'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${file.name.replace(/\.[^.]+$/, '')}.txt`; link.click(); URL.revokeObjectURL(url); };
           }
         } catch (error) {
+          console.error('FluxMedia upload failed', error);
           result.innerHTML = `<p class="text-rose-300">Error: ${escapeHtml(error.message)}</p>`;
         } finally {
           window.clearInterval(progressTimer);
@@ -147,6 +169,6 @@
     document.querySelector('#form-audio-text input[type="file"]').setAttribute('accept', '.mp3,.wav,.m4a,.aac,.flac,.ogg,.oga,.opus,.wma,.aiff,.aif,.ape,.amr,.3gp,.3gpp,.mka,.webm,.weba,.ac3,.caf,.au,.snd,audio/*'); setupDropZones(); handleUpload('form-video-audio','result-video-audio','/api/v1/video-to-audio',true); handleUpload('form-audio-text','result-audio-text','/api/v1/audio-to-text'); handleUpload('form-video-text','result-video-text','/api/v1/video-to-text');
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/static/auth.js?v=4"></script>
+  <script src="/static/auth.js?v=5"></script>
 </body>
 </html>

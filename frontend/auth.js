@@ -107,7 +107,9 @@
   }
 
   async function authenticatedFetch(input, init = {}) {
-    const currentSession = session || (await supabaseClient?.auth.getSession())?.data?.session;
+    // Do not wait for a Supabase network call before sending application requests.
+    // A missing session should become a visible 401 from the API, not a frozen upload.
+    const currentSession = session;
     const headers = new Headers(init.headers || {});
     if (currentSession?.access_token) headers.set('Authorization', `Bearer ${currentSession.access_token}`);
     const response = await originalFetch(input, { ...init, headers });
@@ -246,7 +248,7 @@
     const config = await originalFetch(`${apiBase}/api/v1/auth/config`).then((response) => response.json()).catch(() => ({ enabled: false }));
     if (!config.enabled || !config.supabase_anon_key) return;
     supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);
-    window.fetch = authenticatedFetch;
+    window.fluxAuthenticatedFetch = authenticatedFetch;
     window.addEventListener('flux:upgrade', showUpgrade);
     supabaseClient.auth.onAuthStateChange((_event, nextSession) => onSessionChanged(nextSession));
     const { data } = await supabaseClient.auth.getSession();
